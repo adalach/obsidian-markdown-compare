@@ -1,0 +1,152 @@
+.markdown-source-view .cm-line.markdowncompare-diff-added {
+	background-color: rgba(var(--color-green-rgb), 0.1);
+}
+
+.markdown-source-view .cm-line.markdowncompare-diff-removed {
+	background-color: rgba(var(--color-red-rgb), 0.1);
+}
+
+.markdown-source-view .cm-line.markdowncompare-diff-changed {
+	background-color: rgba(var(--color-yellow-rgb), 0.08);
+}
+
+.markdown-source-view .markdowncompare-diff-added-char {
+	background-color: rgba(var(--color-green-rgb), 0.22);
+	border-radius: 2px;
+}
+
+.markdown-source-view .markdowncompare-diff-removed-char {
+	background-color: rgba(var(--color-red-rgb), 0.22);
+	border-radius: 2px;
+}
+
+.markdowncompare-status-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 6px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.markdowncompare-status-toggle.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.markdowncompare-diffview {
+	padding: 8px;
+	font-size: 10px;
+}
+
+.markdowncompare-diffview-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.markdowncompare-diffview-title {
+	font-weight: 600;
+}
+
+.markdowncompare-diffview-files {
+	display: grid;
+	gap: 4px;
+	margin-bottom: 8px;
+	color: var(--text-muted);
+	font-size: 10px;
+}
+
+.markdowncompare-diffview-file {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+
+.markdowncompare-diffview-file:hover {
+	text-decoration: underline;
+}
+
+.markdowncompare-diffview-list {
+	display: grid;
+	gap: 4px;
+}
+
+.markdowncompare-diffview-section {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	padding: 6px 2px 2px;
+	color: var(--text-normal);
+	font-weight: 700;
+}
+
+.markdowncompare-diffview-section-cell {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markdowncompare-diffview-row {
+	display: grid;
+	grid-template-columns: 28px 28px 1fr;
+	gap: 6px;
+	padding: 4px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	cursor: pointer;
+	user-select: none;
+}
+
+.markdowncompare-diffview-row-added {
+	border-left: 3px solid rgba(var(--color-green-rgb), 0.6);
+}
+
+.markdowncompare-diffview-row-removed {
+	border-left: 3px solid rgba(var(--color-red-rgb), 0.6);
+}
+
+.markdowncompare-diffview-row-changed {
+	border-left: 3px solid rgba(var(--color-yellow-rgb), 0.6);
+}
+
+.markdowncompare-diffview-row:hover {
+	background: var(--background-secondary-alt);
+}
+
+.markdowncompare-diffview-cell {
+	font-size: 10px;
+	color: var(--text-muted);
+}
+
+.markdowncompare-diffview-cell-label {
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.markdowncompare-diffview-empty {
+	color: var(--text-muted);
+	font-size: 12px;
+	padding: 8px 0;
+}
+
+.markdown-source-view .cm-line.markdowncompare-jump-line {
+	background-color: rgba(var(--color-purple-rgb), 0.18);
+	animation: markdowncompare-jump-flash 0.5s ease-out;
+}
+
+@keyframes markdowncompare-jump-flash {
+	from {
+		background-color: rgba(var(--color-purple-rgb), 0.26);
+	}
+	to {
+		background-color: rgba(var(--color-purple-rgb), 0.0);
+	}
+}
