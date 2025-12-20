@@ -4,7 +4,6 @@ Compare two open Obsidian notes (split view) and highlight line-level difference
 
 ![markdowncompare-preview.webp](src/markdowncompare-preview.webp)
 
-
 ## Usage
 
 1. Open exactly 2 markdown panes (vertical or horizontal split).
