@@ -283,11 +283,14 @@ function chooseTwoMarkdownViews(
 			return true;
 		}
 
-		let parent: any = leaf.parent;
-		while (parent) {
-			if (parent instanceof WorkspaceSidedock) return true;
-			parent = parent.parent;
-		}
+		type ParentNode = { parent?: ParentNode };
+		let parent: ParentNode | null = leaf.parent as ParentNode;
+			while (parent) {
+				if (parent instanceof WorkspaceSidedock) return true;
+			const next: ParentNode | null = parent.parent ?? null;
+			if (!next || next === parent) return false;
+			parent = next;
+			}
 		return false;
 	};
 
@@ -323,7 +326,9 @@ export function compareTwoVisibleMarkdownViews(
 		plugin.setCompareTargets(null);
 		plugin.setDiffState(null);
 		if (options?.showNotice ?? true) {
-			new Notice("Open exactly 2 markdown panes in the main window, then run compare.");
+			new Notice(
+				"Open exactly two Markdown panes in the main window, then run compare.",
+			);
 		}
 		return;
 	}
@@ -338,7 +343,7 @@ export function compareTwoVisibleMarkdownViews(
 		plugin.setDiffState(null);
 		if (options?.showNotice ?? true) {
 			new Notice(
-				"Switch both panes to Source mode or Live Preview before comparing.",
+				"Switch both panes to source mode or live preview before comparing.",
 			);
 		}
 		return;
@@ -367,7 +372,7 @@ export function compareTwoVisibleMarkdownViews(
 	});
 
 	if (options?.showNotice ?? true) {
-		new Notice("Compared panes: differences highlighted.");
+		new Notice("Differences highlighted.");
 	}
 }
 

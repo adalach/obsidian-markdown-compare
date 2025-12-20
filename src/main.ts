@@ -81,7 +81,7 @@ export default class MarkdownComparePlugin extends Plugin {
 		} else {
 			this.stopLiveCompare();
 			clearAllCompareHighlights(this);
-			new Notice("MarkdownCompare: live compare off");
+			new Notice("Live compare off.");
 		}
 		this.updateStatusBar();
 	}
@@ -89,7 +89,7 @@ export default class MarkdownComparePlugin extends Plugin {
 	private startLiveCompare() {
 		if (this.liveCompareIntervalId != null) return;
 
-		new Notice("MarkdownCompare: live compare on");
+		new Notice("Live compare on.");
 		void this.ensureDiffView();
 		this.refreshLiveCompare();
 
@@ -117,11 +117,11 @@ export default class MarkdownComparePlugin extends Plugin {
 		this.statusBarToggleEl.toggleClass("is-active", on);
 		this.statusBarToggleEl.setAttr(
 			"aria-label",
-			on ? "MarkdownCompare: live compare on" : "MarkdownCompare: live compare off",
+			on ? "Live compare on" : "Live compare off",
 		);
 		this.statusBarToggleEl.setAttr(
 			"title",
-			on ? "MarkdownCompare: live compare on" : "MarkdownCompare: live compare off",
+			on ? "Live compare on" : "Live compare off",
 		);
 	}
 
@@ -196,7 +196,21 @@ export default class MarkdownComparePlugin extends Plugin {
 	}
 
 	async ensureDiffView() {
-		const workspace = this.app.workspace as any;
+		type EnsureSideLeafOptions = {
+			active?: boolean;
+			reveal?: boolean;
+			split?: boolean;
+		};
+		type WorkspaceWithEnsureSideLeaf = {
+			ensureSideLeaf?: (
+				viewType: string,
+				side: "left" | "right",
+				options?: EnsureSideLeafOptions,
+			) => Promise<void>;
+		};
+
+		const workspace = this.app.workspace as typeof this.app.workspace &
+			WorkspaceWithEnsureSideLeaf;
 		if (typeof workspace.ensureSideLeaf === "function") {
 			await workspace.ensureSideLeaf(MARKDOWNCOMPARE_DIFF_VIEW_TYPE, "right", {
 				active: false,
@@ -213,26 +227,49 @@ export default class MarkdownComparePlugin extends Plugin {
 	revealFileInFileExplorer(filePath: string) {
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!(file instanceof TFile)) {
-			new Notice("MarkdownCompare: file not found in vault");
+			new Notice("File not found in vault.");
 			return;
 		}
 
-		const candidates: any[] = [];
+		type RevealInFolderTarget = {
+			revealInFolder?: (target: TFile, open?: boolean) => void;
+		};
+
+		const candidates: RevealInFolderTarget[] = [];
+		const addCandidate = (candidate: unknown) => {
+			if (candidate && typeof candidate === "object") {
+				candidates.push(candidate as RevealInFolderTarget);
+			}
+		};
 
 		try {
 			const leaves = this.app.workspace.getLeavesOfType("file-explorer");
-			for (const leaf of leaves) candidates.push(leaf.view);
+			for (const leaf of leaves) addCandidate(leaf.view);
 		} catch {
 			// ignore
 		}
 
-		const internal = (this.app as any).internalPlugins?.getPluginById?.("file-explorer");
-		const instance = internal?.instance;
+		type InternalPluginInstance = RevealInFolderTarget & {
+			view?: unknown;
+			fileExplorerView?: unknown;
+			views?: { fileExplorer?: unknown };
+		};
+		type InternalPlugins = {
+			getPluginById?: (id: string) => { instance?: unknown } | undefined;
+		};
+
+		const internalPlugins = (
+			this.app as typeof this.app & {
+				internalPlugins?: InternalPlugins;
+			}
+		).internalPlugins;
+		const internal = internalPlugins?.getPluginById?.("file-explorer");
+		const instance = internal?.instance as InternalPluginInstance | undefined;
 		if (instance) {
-			candidates.push(instance.view);
-			candidates.push(instance.fileExplorerView);
-			candidates.push(instance);
-			candidates.push(instance?.views?.fileExplorer);
+			addCandidate(instance.view);
+			addCandidate(instance.fileExplorerView);
+			addCandidate(instance);
+			addCandidate(instance.views?.fileExplorer);
 		}
 
 		for (const view of candidates) {

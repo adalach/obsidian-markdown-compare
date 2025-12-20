@@ -35,7 +35,7 @@ export class MarkdownCompareDiffView extends ItemView {
 	}
 
 	getDisplayText() {
-		return "MarkdownCompare";
+		return "Markdown compare";
 	}
 
 	getIcon() {
@@ -61,13 +61,13 @@ export class MarkdownCompareDiffView extends ItemView {
 
 		const header = contentEl.createDiv({ cls: "markdowncompare-diffview-header" });
 		header.createDiv({
-			text: "MarkdownCompare",
+			text: "Markdown compare",
 			cls: "markdowncompare-diffview-title",
 		});
 
 		if (!state) {
 			contentEl.createDiv({
-				text: "Run “MarkdownCompare: compare two files” to populate this list.",
+				text: "Run the compare two files command to populate this list.",
 				cls: "markdowncompare-diffview-empty",
 			});
 			return;

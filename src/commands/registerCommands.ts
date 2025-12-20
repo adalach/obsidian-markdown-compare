@@ -7,7 +7,7 @@ import {
 export function registerMarkdownCompareCommands(plugin: MarkdownComparePlugin) {
 	plugin.addCommand({
 		id: "compare-two-files",
-		name: "MarkdownCompare: compare two files",
+		name: "Compare two files",
 		callback: () => {
 			void plugin.ensureDiffView();
 			compareTwoVisibleMarkdownViews(plugin, { showNotice: true });
@@ -16,13 +16,13 @@ export function registerMarkdownCompareCommands(plugin: MarkdownComparePlugin) {
 
 	plugin.addCommand({
 		id: "clear-highlights",
-		name: "MarkdownCompare: clear compare highlights",
+		name: "Clear compare highlights",
 		callback: () => clearAllCompareHighlights(plugin),
 	});
 
 	plugin.addCommand({
 		id: "toggle-live-compare",
-		name: "MarkdownCompare: toggle live compare",
+		name: "Toggle live compare",
 		callback: () => plugin.toggleLiveCompare(),
 	});
 }
