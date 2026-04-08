@@ -13,6 +13,7 @@ import {
 import { diffLinesMyers } from "../diff/myersLineDiff";
 import { diffMyers } from "../diff/myersDiff";
 import type { DiffHunk } from "../ui/DiffView";
+import { computeHeadingAnchors, type HeadingAnchor } from "../scroll/headingAnchors";
 
 const ADDED_CLASS = "markdowncompare-diff-added";
 const REMOVED_CLASS = "markdowncompare-diff-removed";
@@ -24,6 +25,24 @@ function splitLines(text: string): string[] {
 	return text.replace(/\r\n/g, "\n").split("\n");
 }
 
+/**
+ * Filter a list of heading anchors (sorted by leftLine) to a strictly
+ * monotone-increasing subsequence in rightLine. This is required before
+ * inserting sentinels so that both augmented arrays receive sentinels in
+ * document order.
+ */
+function filterMonotoneAnchors(anchors: HeadingAnchor[]): HeadingAnchor[] {
+	const result: HeadingAnchor[] = [];
+	let maxRight = 0;
+	for (const anchor of anchors) {
+		if (anchor.rightLine > maxRight) {
+			result.push(anchor);
+			maxRight = anchor.rightLine;
+		}
+	}
+	return result;
+}
+
 function computeHighlights(
 	leftText: string,
 	rightText: string,
@@ -31,7 +50,64 @@ function computeHighlights(
 	const leftLines = splitLines(leftText);
 	const rightLines = splitLines(rightText);
 
-	const edits = diffLinesMyers(leftLines, rightLines);
+	// Compute section anchors and use them to prevent Myers from matching lines
+	// across section boundaries. A unique sentinel string is inserted just before
+	// each matched heading in both augmented arrays. Because sentinels are unique,
+	// Myers must treat them as "equal", effectively locking the alignment at each
+	// matched heading and confining the diff to content within the same section.
+	const anchors = filterMonotoneAnchors(computeHeadingAnchors(leftText, rightText));
+
+	const augLeft: string[] = [];
+	const augRight: string[] = [];
+	// Map from augmented-array index → 1-based original line number.
+	// null means the entry is a sentinel (no corresponding document line).
+	const leftLineOf: (number | null)[] = [];
+	const rightLineOf: (number | null)[] = [];
+
+	let li = 0; // 0-based cursor into leftLines
+	let ri = 0;
+
+	for (let ai = 0; ai < anchors.length; ai++) {
+		const anchor = anchors[ai]!;
+		const sentinel = `\x00section-boundary\x00${ai}\x00`;
+
+		while (li < anchor.leftLine - 1) {
+			augLeft.push(leftLines[li]!);
+			leftLineOf.push(li + 1);
+			li++;
+		}
+		while (ri < anchor.rightLine - 1) {
+			augRight.push(rightLines[ri]!);
+			rightLineOf.push(ri + 1);
+			ri++;
+		}
+
+		augLeft.push(sentinel);
+		augRight.push(sentinel);
+		leftLineOf.push(null);
+		rightLineOf.push(null);
+
+		augLeft.push(leftLines[li]!);
+		leftLineOf.push(li + 1);
+		li++;
+
+		augRight.push(rightLines[ri]!);
+		rightLineOf.push(ri + 1);
+		ri++;
+	}
+
+	while (li < leftLines.length) {
+		augLeft.push(leftLines[li]!);
+		leftLineOf.push(li + 1);
+		li++;
+	}
+	while (ri < rightLines.length) {
+		augRight.push(rightLines[ri]!);
+		rightLineOf.push(ri + 1);
+		ri++;
+	}
+
+	const edits = diffLinesMyers(augLeft, augRight);
 
 	const leftDecorations: DiffLineDecoration[] = [];
 	const rightDecorations: DiffLineDecoration[] = [];
@@ -39,31 +115,34 @@ function computeHighlights(
 	const rightMarks: DiffMarkDecoration[] = [];
 	const hunks: DiffHunk[] = [];
 
-	let leftLine = 1;
-	let rightLine = 1;
+	let augLi = 0;
+	let augRi = 0;
+	// Last-seen original line numbers — used as fallback context in flush().
+	let ctxLeft = 1;
+	let ctxRight = 1;
 	let pendingDeletes: number[] = [];
 	let pendingInserts: number[] = [];
 
-		const getHeaderForLine = (lines: string[], line: number) => {
-			const clamped = Math.max(1, Math.min(line, lines.length));
-			for (let i = clamped; i >= 1; i--) {
-				const raw = lines[i - 1] ?? "";
-				const match = raw.match(/^(#{1,6})\s+(.*)$/);
-				if (!match) continue;
-				const level = match[1] ?? "";
-				const text = (match[2] ?? "").trim();
-				return `${level} ${text}`.trim();
-			}
-			return null;
-		};
+	const getHeaderForLine = (lines: string[], line: number) => {
+		const clamped = Math.max(1, Math.min(line, lines.length));
+		for (let i = clamped; i >= 1; i--) {
+			const raw = lines[i - 1] ?? "";
+			const match = raw.match(/^(#{1,6})\s+(.*)$/);
+			if (!match) continue;
+			const level = match[1] ?? "";
+			const text = (match[2] ?? "").trim();
+			return `${level} ${text}`.trim();
+		}
+		return null;
+	};
 
-	const getPreview = (kind: DiffHunk["kind"], leftLine: number | null, rightLine: number | null) => {
+	const getPreview = (kind: DiffHunk["kind"], leftLineN: number | null, rightLineN: number | null) => {
 		const raw =
 			kind === "added"
-				? (rightLine != null ? (rightLines[rightLine - 1] ?? "") : "")
+				? (rightLineN != null ? (rightLines[rightLineN - 1] ?? "") : "")
 				: kind === "removed"
-					? (leftLine != null ? (leftLines[leftLine - 1] ?? "") : "")
-					: (rightLine != null ? (rightLines[rightLine - 1] ?? "") : (leftLine != null ? (leftLines[leftLine - 1] ?? "") : ""));
+					? (leftLineN != null ? (leftLines[leftLineN - 1] ?? "") : "")
+					: (rightLineN != null ? (rightLines[rightLineN - 1] ?? "") : (leftLineN != null ? (leftLines[leftLineN - 1] ?? "") : ""));
 
 		return raw.replace(/\t/g, "    ").slice(0, 80);
 	};
@@ -72,8 +151,8 @@ function computeHighlights(
 		if (pendingDeletes.length > 0 && pendingInserts.length > 0) {
 			const leftStart = pendingDeletes[0] ?? null;
 			const rightStart = pendingInserts[0] ?? null;
-			const leftContextLine = leftStart ?? Math.max(1, leftLine - 1);
-			const rightContextLine = rightStart ?? Math.max(1, rightLine - 1);
+			const leftContextLine = leftStart ?? Math.max(1, ctxLeft);
+			const rightContextLine = rightStart ?? Math.max(1, ctxRight);
 			hunks.push({
 				kind: "changed",
 				leftLine: leftStart,
@@ -103,27 +182,15 @@ function computeHighlights(
 				);
 
 				for (const [from, to] of leftRanges) {
-					leftMarks.push({
-						line: leftLineNo,
-						from,
-						to,
-						className: REMOVED_CHAR_CLASS,
-					});
+					leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
 				}
 				for (const [from, to] of rightRanges) {
-					rightMarks.push({
-						line: rightLineNo,
-						from,
-						to,
-						className: ADDED_CHAR_CLASS,
-					});
+					rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
 				}
 			}
 
 			for (const line of pendingDeletes.slice(pairCount)) {
 				leftDecorations.push({ line, className: REMOVED_CLASS });
-				const leftContextLine = line;
-				const rightContextLine = Math.max(1, rightLine - 1);
 				hunks.push({
 					kind: "removed",
 					leftLine: line,
@@ -131,14 +198,12 @@ function computeHighlights(
 					leftCount: 1,
 					rightCount: 0,
 					preview: getPreview("removed", line, null),
-					leftHeader: getHeaderForLine(leftLines, leftContextLine),
-					rightHeader: getHeaderForLine(rightLines, rightContextLine),
+					leftHeader: getHeaderForLine(leftLines, line),
+					rightHeader: getHeaderForLine(rightLines, Math.max(1, ctxRight)),
 				});
 			}
 			for (const line of pendingInserts.slice(pairCount)) {
 				rightDecorations.push({ line, className: ADDED_CLASS });
-				const leftContextLine = Math.max(1, leftLine - 1);
-				const rightContextLine = line;
 				hunks.push({
 					kind: "added",
 					leftLine: null,
@@ -146,14 +211,14 @@ function computeHighlights(
 					leftCount: 0,
 					rightCount: 1,
 					preview: getPreview("added", null, line),
-					leftHeader: getHeaderForLine(leftLines, leftContextLine),
-					rightHeader: getHeaderForLine(rightLines, rightContextLine),
+					leftHeader: getHeaderForLine(leftLines, Math.max(1, ctxLeft)),
+					rightHeader: getHeaderForLine(rightLines, line),
 				});
 			}
 		} else if (pendingDeletes.length > 0) {
 			const leftStart = pendingDeletes[0] ?? null;
-			const leftContextLine = leftStart ?? Math.max(1, leftLine - 1);
-			const rightContextLine = Math.max(1, rightLine - 1);
+			const leftContextLine = leftStart ?? Math.max(1, ctxLeft);
+			const rightContextLine = Math.max(1, ctxRight);
 			hunks.push({
 				kind: "removed",
 				leftLine: leftStart,
@@ -169,8 +234,8 @@ function computeHighlights(
 			}
 		} else if (pendingInserts.length > 0) {
 			const rightStart = pendingInserts[0] ?? null;
-			const leftContextLine = Math.max(1, leftLine - 1);
-			const rightContextLine = rightStart ?? Math.max(1, rightLine - 1);
+			const leftContextLine = Math.max(1, ctxLeft);
+			const rightContextLine = rightStart ?? Math.max(1, ctxRight);
 			hunks.push({
 				kind: "added",
 				leftLine: null,
@@ -192,19 +257,35 @@ function computeHighlights(
 
 	for (const edit of edits) {
 		switch (edit.type) {
-			case "equal":
+			case "equal": {
 				flush();
-				leftLine++;
-				rightLine++;
+				const origLeft = leftLineOf[augLi] ?? null;
+				const origRight = rightLineOf[augRi] ?? null;
+				augLi++;
+				augRi++;
+				// Update context after flush; skip sentinels (null entries).
+				if (origLeft !== null) ctxLeft = origLeft;
+				if (origRight !== null) ctxRight = origRight;
 				break;
-			case "delete":
-				pendingDeletes.push(leftLine);
-				leftLine++;
+			}
+			case "delete": {
+				const origLeft = leftLineOf[augLi] ?? null;
+				augLi++;
+				if (origLeft !== null) {
+					pendingDeletes.push(origLeft);
+					ctxLeft = origLeft;
+				}
 				break;
-			case "insert":
-				pendingInserts.push(rightLine);
-				rightLine++;
+			}
+			case "insert": {
+				const origRight = rightLineOf[augRi] ?? null;
+				augRi++;
+				if (origRight !== null) {
+					pendingInserts.push(origRight);
+					ctxRight = origRight;
+				}
 				break;
+			}
 		}
 	}
 
