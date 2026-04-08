@@ -1,5 +1,6 @@
 import type { EditorView } from "@codemirror/view";
 import { EditorView as EditorViewNS } from "@codemirror/view";
+import { computeHeadingAnchors, mapLineWithAnchors, type HeadingAnchor } from "./headingAnchors";
 
 export interface CompareTargets {
 	leftEditorView: EditorView;
@@ -32,6 +33,22 @@ export function startScrollSync(left: EditorView, right: EditorView) {
 	let rafId: number | null = null;
 	let pending: { source: EditorView } | null = null;
 
+	// Cache anchors by doc object identity — recompute only when content changes.
+	let cachedLeftDoc: unknown = null;
+	let cachedRightDoc: unknown = null;
+	let cachedAnchors: HeadingAnchor[] = [];
+
+	const getAnchors = (): HeadingAnchor[] => {
+		const leftDoc = left.state.doc;
+		const rightDoc = right.state.doc;
+		if (leftDoc !== cachedLeftDoc || rightDoc !== cachedRightDoc) {
+			cachedLeftDoc = leftDoc;
+			cachedRightDoc = rightDoc;
+			cachedAnchors = computeHeadingAnchors(leftDoc.toString(), rightDoc.toString());
+		}
+		return cachedAnchors;
+	};
+
 	const syncFrom = (source: EditorView) => {
 		pending = { source };
 		if (rafId != null) return;
@@ -43,6 +60,7 @@ export function startScrollSync(left: EditorView, right: EditorView) {
 			const src = pending.source;
 			pending = null;
 			const dst = src === left ? right : left;
+			const leftToRight = src === left;
 
 			if (syncing) return;
 			syncing = true;
@@ -51,7 +69,15 @@ export function startScrollSync(left: EditorView, right: EditorView) {
 				const srcBlock = src.lineBlockAtHeight(srcTop + 2);
 				const srcLine = src.state.doc.lineAt(srcBlock.from).number;
 
-				const dstLine = Math.max(1, Math.min(srcLine, dst.state.doc.lines));
+				const anchors = getAnchors();
+				const dstLine = mapLineWithAnchors(
+					srcLine,
+					anchors,
+					src.state.doc.lines,
+					dst.state.doc.lines,
+					leftToRight,
+				);
+
 				const dstPos = dst.state.doc.line(dstLine).from;
 				const dstBlock = dst.lineBlockAt(dstPos);
 				dst.scrollDOM.scrollTop = dstBlock.top;
